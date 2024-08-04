@@ -1,7 +1,7 @@
-import { Button } from "./components/ui/button";
+import PostList from "./components/PostList";
 
 function App() {
-  return <Button>Click me</Button>;
+  return <PostList />;
 }
 
 export default App;
