@@ -16,20 +16,27 @@ interface Post {
 }
 
 function PostList() {
+  const [page, setPage] = useState(1);
+
   const { isLoading, data, isError, error } = useQuery({
-    queryKey: ["posts"],
-    queryFn: fetchPosts,
+    queryKey: ["posts", { page }],
+    queryFn: () => fetchPosts(page),
+    staleTime: 1000 * 60 * 5, // 2 minutes
+    // refetchInterval: 1000 * 2, // 5 minutes //the time in milliseconds after which the data is refetched from the server.
+    //gcTime: 1000 * 5, // 5 minutes //the time in milliseconds after which the data is removed from the cache.
   });
 
   const { data: tagsData } = useQuery({
     queryKey: ["tags"],
     queryFn: fetchTags,
+    staleTime: Infinity, // 5 minutes
   });
   const queryClient = useQueryClient();
 
   const {
     mutate: createPost,
     isError: isAddPostErr,
+    error: addPostError,
     isPending: isAddPostPending,
     reset: resetAddPost,
   } = useMutation({
@@ -38,23 +45,26 @@ function PostList() {
 
     //runs before the mutation function is called
     onMutate: (post: Post) => {
-      console.log("onMutate", post);
+      if (post.title === "") {
+        console.log("onMutate", post);
+        throw new Error("Title is required");
+      }
+
       return { context: "the onMutate context" };
     },
+    // throwOnError: true, // if true, the error is thrown and the onError function is called
+
     // runs after the mutation function is called
     onSuccess: (data: Post, variables, context) => {
       console.log("onSuccess", data);
       console.log("context", context);
 
-      //   validate the data
-      if (data.title === "") {
-        throw new Error("Title is required");
-      }
+      setformData({ title: "", tags: [] });
 
       queryClient.invalidateQueries({
         queryKey: ["posts"],
 
-        exact: true, // if true, only invalidate the exact queryKey
+        // exact: true, // if true, only invalidate the exact queryKey
         // predicate: (query) => query.queryKey[0] === "posts", // if false, invalidate all queries that match the queryKey
       });
     },
@@ -69,6 +79,8 @@ function PostList() {
       console.log("context", context);
     },
   });
+
+  console.log("isAddPostErr", isAddPostErr, error);
 
   const [formData, setformData] = useState<Post>({
     title: "",
@@ -88,6 +100,14 @@ function PostList() {
 
       <div>
         <div className="grid grid-cols-1 gap-2 p-3 max-w-md">
+          {isAddPostErr && addPostError?.message && (
+            <div
+              className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
+              role="alert"
+            >
+              {addPostError.message}
+            </div>
+          )}
           <input
             type="text"
             name="title"
@@ -145,7 +165,27 @@ function PostList() {
             {error instanceof Error ? error.message : "An error occurred"}
           </div>
         )}
-        {data?.map((post: Post, index: number) => (
+
+        {/* /Pagination  */}
+        <button
+          onClick={() => setPage((prev) => prev - 1)}
+          disabled={page === 1 || !data?.prev}
+          className="bg-blue-500 text-white p-2 rounded"
+        >
+          Previous
+        </button>
+        <span>
+          Page: <strong>{page}</strong>
+        </span>
+        <button
+          onClick={() => setPage((prev) => prev + 1)}
+          disabled={!data?.next}
+          className="bg-blue-500 text-white p-2 rounded"
+        >
+          Next
+        </button>
+
+        {data?.data?.map((post: Post, index: number) => (
           <Card key={index} className="mb-4">
             <CardHeader>
               <CardTitle>{post.title}</CardTitle>
